@@ -1,0 +1,171 @@
+"use strict";
+
+var type = "WebGL"
+if(!PIXI.utils.isWebGLSupported()){
+    type = "canvas"
+}
+
+PIXI.utils.sayHello(type)
+
+//Create the renderer
+var renderer = PIXI.autoDetectRenderer(400,600);
+
+//Add the canvas to the HTML document
+document.body.appendChild(renderer.view);
+
+//Create a container object called the `stage`
+var stage = new PIXI.Container();
+
+//Tell the `renderer` to `render` the `stage`
+renderer.render(stage);
+
+renderer.view.style.border = "1px dashed black";
+
+var TextureCache = PIXI.utils.TextureCache
+var PResources = PIXI.loader.resources
+var PSprite = PIXI.Sprite
+
+PIXI.loader
+.add("pics/yellow.jpg")
+.add("pics/green.jpg")
+.load(game);
+
+var rule1 = function(grid, x, y, step)
+{
+    grid.flip(x+1,y+1);
+}
+
+var rule2 = function(grid, x, y, step)
+{
+    grid.flip(x+step, y);
+}
+
+var rule3 = function(grid, x, y, step)
+{
+    var vals = [ [0,1], [1,1], [1,0], [1,-1], [0,-1], [-1,-1], [-1,0], [-1,1] ];
+    grid.flip(x+vals[step%8][0], y + vals[step%8][1]);
+}
+
+class Grid {
+
+    constructor(x,y)
+    {
+        this.x = x;
+        this.y = y;
+        this.lights = Array(x).fill().map( () => Array(y).fill(false)) ;
+        this.step = 0;
+    }
+    
+    setGraphics(graphics)
+    {
+        this.graphics = graphics
+    }
+    
+    update()
+    {
+        for(var i = 0; i < this.x; ++i)
+            {
+            for(var j = 0; j < this.y; ++j)
+                {
+                    this.graphics.activate(i,j,this.lights[i][j]);
+                }
+            }
+        renderer.render(stage);
+    }
+
+    normx(i)
+    {
+        return ((i % this.x) + this.x) % this.x;  
+    }
+
+    normy(j)
+    {
+        return ((j % this.y) + this.y) % this.y;
+    }
+
+    flip(i,j)
+    {
+        var normi = this.normx(i);
+        var normj = this.normy(j);
+        this.lights[normi][normj] = !this.lights[normi][normj]
+    }
+
+    clickon(e,i,j)
+    {
+        console.log("click",e,i,j);
+        this.step++;
+        rule3(this, i, j, this.step);
+        this.update();
+    }
+};
+
+
+var GridGConsts = {
+    xbase: 50,
+    ybase: 80,
+    xborder: 2,
+    yborder: 2,
+    xsize: 60,
+    ysize: 60,
+};
+
+class GridGraphics {
+    
+    xpos(i) { return this.consts.xbase + i * (this.consts.xsize + this.consts.xborder); };
+    ypos(j) { return this.consts.ybase + j * (this.consts.ysize + this.consts.yborder); };
+    
+    newsprite(texture, i, j) {
+        var sprite = new PSprite(texture);
+        sprite.x = this.xpos(i);
+        sprite.y = this.ypos(j);
+        sprite.width = this.consts.xsize;
+        sprite.height = this.consts.ysize;
+        return sprite;
+    }
+    
+    subscribe(obj, i, j) {
+        obj.interactive = true
+        obj.on('mousedown', (e) => this.grid.clickon(e,i,j))
+        .on('touchstart', (e) => this.grid.clickon(e,i,j));
+    }
+    
+    activate(i,j,b) {
+        this.ysprite[i][j].visible = b;
+        this.gsprite[i][j].visible = !b;
+    }
+    
+    constructor(consts, grid, stage) {
+        this.consts = consts;
+        this.grid = grid;
+        this.grid.setGraphics(this);
+        this.stage = stage;
+        var ytexture = PResources["pics/yellow.jpg"].texture;
+        var gtexture = PResources["pics/green.jpg"].texture;
+        this.ysprite = [];
+        this.gsprite = [];
+        for(var i = 0; i < grid.x; ++i) {
+            var rowysprite = [];
+            var rowgsprite = [];
+            for(var j = 0; j < grid.y; ++j) {
+                rowysprite[j] = this.newsprite(ytexture,i,j); 
+                rowgsprite[j] = this.newsprite(gtexture,i,j);
+                this.subscribe(rowysprite[j],i,j);
+                this.subscribe(rowgsprite[j],i,j);
+                stage.addChild(rowysprite[j]);
+                stage.addChild(rowgsprite[j]);
+            }
+            this.ysprite[i] = rowysprite;
+            this.gsprite[i] = rowgsprite;
+        }
+    }
+};
+
+
+
+function game() {
+    //PIXI.utils.sayHello("game");
+    var myGrid = new Grid(5,5);
+    var myGGraphics = new GridGraphics(GridGConsts, myGrid, stage);
+    
+    renderer.render(stage);
+}
